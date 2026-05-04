@@ -297,6 +297,31 @@
   const WARN_TIME     = 0.45; // seconds of "INCOMING!" warning before each flip
   const DOWN          = new THREE.Vector3(0, -1, 0);
 
+  // ── audio ──────────────────────────────────────────────────────────
+  const THEME_VOL = 0.1;
+  const sfx = {
+    theme:     Object.assign(new Audio('audio/koto_theme.mp3'),      { loop: true,  volume: THEME_VOL }),
+    hajime:    Object.assign(new Audio('audio/hajime.m4a'),          { volume: 1.0 }),
+    shuffle:   Object.assign(new Audio('audio/feet_shuffling.wav'),  { volume: 0.8 }),
+    thud:      Object.assign(new Audio('audio/thud.wav'),            { volume: 1.0 }),
+    ippon:     Object.assign(new Audio('audio/ippon_koto.mp3'),      { volume: 0.2 }),
+  };
+  function play(name) { sfx[name].currentTime = 0; sfx[name].play().catch(() => {}); }
+  function stop(name) { sfx[name].pause(); sfx[name].currentTime = 0; }
+
+  // Theme: try autoplay immediately; unconditionally unlock on first interaction too
+  // (browsers often silently ignore the play() call without rejecting it)
+  let themeStarted = false;
+  function startTheme() {
+    if (themeStarted) return;
+    themeStarted = true;
+    sfx.theme.play().catch(() => {});
+  }
+  sfx.theme.play().then(() => { themeStarted = true; }).catch(() => {});
+  ['click', 'touchstart', 'keydown'].forEach(evt =>
+    document.addEventListener(evt, startTheme, { once: true, passive: true })
+  );
+
   // face normals: [+X, -X, +Y, -Y, +Z, -Z]
   const NORMALS = [
     new THREE.Vector3( 1, 0, 0),
@@ -844,6 +869,7 @@
       .setFromAxisAngle(axis, sign * Math.PI / 2)
       .multiply(startQ);
     rotAnim = { startQ, endQ, frame: 0 };
+    play('shuffle');
   }
 
   function fastInterval() { const c = DIFF_CFG[DIFF]; return c.fastMin + Math.random() * c.fastRange; }
@@ -878,6 +904,7 @@
     if (e.code === 'Space') {
       e.preventDefault();
       isHolding = true;
+      play('thud');
       return;
     }
 
@@ -913,7 +940,7 @@
   let touchStart = null;
   document.addEventListener('touchstart', e => {
     touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    if (phase === 'playing') isHolding = true;
+    if (phase === 'playing') { isHolding = true; play('thud'); }
   }, { passive: true });
   document.addEventListener('touchend', e => {
     if (!touchStart) return;
@@ -956,6 +983,12 @@
 
   function endMatch(won, reason) {
     phase = won ? 'won' : 'lost';
+    if (won) {
+      sfx.theme.volume = 0.03;
+      sfx.ippon.currentTime = 0;
+      sfx.ippon.play().catch(() => {});
+      sfx.ippon.addEventListener('ended', () => { sfx.theme.volume = THEME_VOL; }, { once: true });
+    }
     document.getElementById('modal').classList.add('on');
     const t = document.getElementById('modal-title');
     t.textContent = won ? 'IPPON!' : 'SORE MADE';
@@ -1031,6 +1064,7 @@
     document.getElementById('modal').classList.remove('on');
     const overlay = document.getElementById('hajime-overlay');
     overlay.classList.add('on');
+    play('hajime');
 
     // Snap the cube from its current idle rotation to front-facing (identity).
     // Phase 'snapping' keeps the loop from running game logic or idle rotation.
