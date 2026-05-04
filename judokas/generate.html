@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Judoka Texture Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #111; color: white;
+    font-family: 'Courier New', monospace;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin-bottom: 6px; color: #ffd700; }
+  p  { font-size: 13px; color: #aaa; margin-bottom: 24px; line-height: 1.6; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    max-width: 900px;
+  }
+  .face { text-align: center; }
+  .face h3 { font-size: 12px; letter-spacing: 1px; color: #7ab4ff; margin-bottom: 8px; }
+  .face canvas { display: block; margin: 0 auto; border: 1px solid #333; }
+  .face button {
+    margin-top: 10px;
+    background: #ffd700; color: #111;
+    border: none; padding: 7px 18px;
+    font: bold 12px 'Courier New', monospace;
+    border-radius: 6px; cursor: pointer; letter-spacing: 1px;
+  }
+  .face button:hover { background: #ffe566; }
+  #judoka-input {
+    display: flex; gap: 12px; align-items: center; margin-bottom: 28px;
+  }
+  #judoka-input label { font-size: 13px; color: #aaa; }
+  #judoka-name {
+    background: #222; border: 1px solid #444; color: white;
+    padding: 6px 12px; font: 14px 'Courier New', monospace;
+    border-radius: 4px; width: 180px;
+  }
+  #judoka-name:focus { outline: none; border-color: #ffd700; }
+  #regen-btn {
+    background: #333; color: #ffd700;
+    border: 1px solid #555; padding: 6px 16px;
+    font: 13px 'Courier New', monospace;
+    border-radius: 4px; cursor: pointer;
+  }
+  #regen-btn:hover { background: #444; }
+  #save-all {
+    display: block; margin: 28px 0 0;
+    background: #ffd700; color: #111;
+    border: none; padding: 11px 28px;
+    font: bold 14px 'Courier New', monospace;
+    border-radius: 8px; cursor: pointer; letter-spacing: 1px;
+  }
+  #save-all:hover { background: #ffe566; }
+  #instructions {
+    margin-top: 28px; font-size: 12px; color: #666; line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+
+<h1>Judoka Texture Generator</h1>
+<p>
+  Generates the six cube-face PNGs for a judoka.<br>
+  Customise the name/country below, then save each face to <code>judokas/&lt;Name&gt;/</code>.
+</p>
+
+<div id="judoka-input">
+  <label>Judoka name:</label>
+  <input id="judoka-name" type="text" value="Mojo">
+  <label>Country code:</label>
+  <input id="country-code" type="text" value="MGL" style="width:80px">
+  <label>Country:</label>
+  <input id="country-name" type="text" value="MONGOLIA" style="width:140px">
+  <button id="regen-btn">Regenerate</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<button id="save-all">Save folder as ZIP</button>
+
+<div id="instructions">
+  1. Click "Save folder as ZIP" to download all 6 faces in one go, or use individual face buttons.<br>
+  2. Unzip — you'll get a <code>YourName/</code> folder. Move it into <code>judokas/</code>.<br>
+  3. Add the name as a new line in <code>judokas/list</code>.<br>
+  4. Reload the game — the name appears in the dropdown automatically.<br>
+  <br>
+  You can also replace any PNG with your own artwork (photo, illustration, etc.).<br>
+  Recommended size: 512×512 px.
+</div>
+
+<script>
+function mkCanvas(w, h) {
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  return cv;
+}
+
+function mkTopTex() {
+  const S = 256, cv = mkCanvas(S, S), c = cv.getContext('2d');
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(0, 0, S, S);
+  // buzzcut stubble grain
+  c.fillStyle = 'rgba(255,255,255,0.07)';
+  for (let y = 3; y < S; y += 4) {
+    for (let x = 3; x < S; x += 5) {
+      c.fillRect(x + (y % 2) * 2, y, 2, 1);
+    }
+  }
+  // light reflection streak
+  c.fillStyle = 'rgba(255,255,255,0.18)';
+  c.fillRect(S*0.2, S*0.15, S*0.6, S*0.07);
+  return cv;
+}
+
+function mkSideTex(flip = false) {
+  const S = 512, cv = mkCanvas(S, S), c = cv.getContext('2d');
+  if (flip) { c.translate(S, 0); c.scale(-1, 1); }
+  const hairH   = Math.round(S * 0.13);
+  const headBot = Math.round(S * 0.28);
+  const beltTop = Math.round(S * 0.88);
+  const beltH   = S - beltTop;
+
+  // gi fabric base
+  c.fillStyle = '#eeeae0';
+  c.fillRect(0, 0, S, S);
+
+  // skin on the front/face-visible side (right half)
+  c.fillStyle = '#f5c89a';
+  c.fillRect(Math.round(S*0.48), hairH, Math.round(S*0.52), headBot - hairH);
+
+  // black back-of-head extends down left half
+  c.fillStyle = '#1a1a1a';
+  c.fillRect(0, hairH, Math.round(S*0.48), headBot - hairH);
+
+  // ear carved from the black as skin
+  const earW = Math.round(S * 0.14), earH = Math.round(S * 0.12);
+  const earX = Math.round(S * 0.30), earY = Math.round(hairH + (headBot-hairH)*0.20);
+  c.fillStyle = '#f5c89a';
+  c.fillRect(earX, earY, earW, earH);
+  c.strokeStyle = '#d4a070'; c.lineWidth = 1.5;
+  c.strokeRect(earX, earY, earW, earH);
+
+  // sleeve starts at headBot
+  const slvX = Math.round(S*0.28), slvW = Math.round(S*0.44);
+  const slvT = headBot, slvB = Math.round(S*0.54);
+  c.fillStyle = '#e8e4da';
+  c.beginPath();
+  c.moveTo(slvX, slvT); c.lineTo(slvX+slvW, slvT);
+  c.lineTo(slvX+slvW-Math.round(S*0.03), slvB); c.lineTo(slvX+Math.round(S*0.03), slvB);
+  c.closePath(); c.fill();
+  c.strokeStyle = '#ccc8bc'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(slvX+slvW*0.3, slvT); c.lineTo(slvX+slvW*0.3, slvB); c.stroke();
+  c.beginPath(); c.moveTo(slvX+slvW*0.7, slvT); c.lineTo(slvX+slvW*0.7, slvB); c.stroke();
+
+  const fstW = Math.round(slvW*0.72), fstH = Math.round(S*0.078);
+  const fstX = slvX + Math.round((slvW-fstW)/2), fstY = slvB;
+  c.fillStyle = '#f5c89a';
+  c.fillRect(fstX, fstY, fstW, fstH);
+  c.strokeStyle = '#d4a070'; c.lineWidth = 2;
+  for (let i = 1; i < 4; i++) {
+    const kx = fstX + Math.round(fstW*i/4);
+    c.beginPath(); c.moveTo(kx, fstY+2); c.lineTo(kx, fstY+fstH-2); c.stroke();
+  }
+
+  c.fillStyle = '#1e1e1e'; c.fillRect(0, beltTop, S, beltH);
+  c.fillStyle = 'rgba(255,255,255,0.08)'; c.fillRect(0, beltTop+2, S, Math.round(beltH*0.35));
+  c.strokeStyle = '#3a3a3a'; c.lineWidth = 1.5; c.strokeRect(0, beltTop, S, beltH);
+
+  // hair strip drawn last — covers everything at the top
+  c.fillStyle = '#1a1a1a'; c.fillRect(0, 0, S, hairH);
+  c.fillStyle = 'rgba(255,255,255,0.07)';
+  for (let y = 2; y < hairH; y += 4) {
+    for (let x = 2; x < S; x += 5) { c.fillRect(x + (y%2)*2, y, 2, 1); }
+  }
+  return cv;
+}
+
+function mkBottomTex() {
+  const S = 512, cv = mkCanvas(S, S), c = cv.getContext('2d');
+  c.fillStyle = '#e0dbd0'; c.fillRect(0, 0, S, S);
+  c.strokeStyle = '#ccc8ba'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(S/2,0); c.lineTo(S/2,S); c.stroke();
+
+  const footW = Math.round(S*0.28), footH = Math.round(S*0.42);
+  const footY = Math.round(S*0.30);
+  const lFX = Math.round(S*0.11), rFX = Math.round(S*0.61);
+  const toeH = Math.round(S*0.09), toeY = footY - toeH + 4;
+
+  c.fillStyle = '#d5d0c4';
+  c.fillRect(lFX-4, Math.round(S*0.16), footW+8, Math.round(footY-S*0.16));
+  c.fillRect(rFX-4, Math.round(S*0.16), footW+8, Math.round(footY-S*0.16));
+
+  c.fillStyle = '#f5c89a';
+  c.fillRect(lFX, footY, footW, footH); c.fillRect(rFX, footY, footW, footH);
+  c.strokeStyle = '#d4a272'; c.lineWidth = 2;
+  c.strokeRect(lFX, footY, footW, footH); c.strokeRect(rFX, footY, footW, footH);
+
+  const nToes=5, tPad=3, tW=Math.round((footW-tPad*(nToes+1))/nToes);
+  c.fillStyle = '#e8b688'; c.strokeStyle = '#d4a272'; c.lineWidth = 1.5;
+  for (let i=0;i<nToes;i++) {
+    const tx=lFX+tPad+i*(tW+tPad); c.fillRect(tx,toeY,tW,toeH); c.strokeRect(tx,toeY,tW,toeH);
+    const tx2=rFX+tPad+i*(tW+tPad); c.fillRect(tx2,toeY,tW,toeH); c.strokeRect(tx2,toeY,tW,toeH);
+  }
+  c.fillStyle = 'rgba(255,255,255,0.35)';
+  for (let i=0;i<nToes;i++) {
+    c.fillRect(lFX+tPad+i*(tW+tPad)+2, toeY+2, Math.round(tW*0.5), Math.round(toeH*0.4));
+    c.fillRect(rFX+tPad+i*(tW+tPad)+2, toeY+2, Math.round(tW*0.5), Math.round(toeH*0.4));
+  }
+
+  return cv;
+}
+
+function mkBackPatchTex(name, countryCode, countryFull) {
+  const S = 512, cv = mkCanvas(S, S), c = cv.getContext('2d');
+  const headBot = Math.round(S * 0.28); // matches full head height on sides
+  const beltTop = Math.round(S * 0.88);
+  const beltH   = S - beltTop;
+
+  // gi fabric
+  c.fillStyle = '#eeeae0'; c.fillRect(0, 0, S, S);
+
+  // back of head — full head height, same as sides
+  c.fillStyle = '#1a1a1a'; c.fillRect(0, 0, S, headBot);
+  c.fillStyle = 'rgba(255,255,255,0.07)';
+  for (let y=2; y<headBot; y+=4) {
+    for (let x=2; x<S; x+=5) { c.fillRect(x+(y%2)*2,y,2,1); }
+  }
+
+  // stitch border below head
+  c.strokeStyle = '#c8c4ba'; c.lineWidth = 4;
+  c.strokeRect(12, headBot+8, S-24, beltTop-headBot-16);
+
+  // blue name band
+  const bX=20, bY=headBot+18, bW=S-40, bH=Math.round((beltTop-headBot)*0.50);
+  c.fillStyle = '#003DA5'; c.fillRect(bX, bY, bW, bH);
+  c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth=2;
+  c.strokeRect(bX+4, bY+4, bW-8, bH-8);
+
+  c.fillStyle = '#ffffff';
+  c.font = `bold ${Math.round(S*0.115)}px "Arial Black",Arial,sans-serif`;
+  c.textAlign='center'; c.textBaseline='middle';
+  c.fillText(name.toUpperCase(), S/2, bY+bH*0.42);
+  c.font = `bold ${Math.round(S*0.072)}px Arial,sans-serif`;
+  c.fillText(countryCode.toUpperCase(), S/2, bY+bH*0.78);
+
+  // country name below band
+  const lowerMid = (bY+bH + beltTop) / 2;
+  c.fillStyle = '#1a1a2e';
+  c.font = `bold ${Math.round(S*0.075)}px Arial,sans-serif`;
+  c.fillText(countryFull.toUpperCase(), S/2, lowerMid);
+  c.strokeStyle = '#b0aba0'; c.lineWidth=1.5;
+  for (const dy of [-14,14]) {
+    c.beginPath(); c.moveTo(36, lowerMid+dy); c.lineTo(S-36, lowerMid+dy); c.stroke();
+  }
+
+  // belt at bottom
+  c.fillStyle = '#1e1e1e'; c.fillRect(0, beltTop, S, beltH);
+  c.fillStyle = 'rgba(255,255,255,0.08)'; c.fillRect(0, beltTop+2, S, Math.round(beltH*0.35));
+  c.strokeStyle = '#3a3a3a'; c.lineWidth = 1.5; c.strokeRect(0, beltTop, S, beltH);
+  return cv;
+}
+
+function mkFrontFaceTex() {
+  const S = 512, cv = mkCanvas(S, S), c = cv.getContext('2d');
+  const hairH = Math.round(S*0.13), headBot = Math.round(S*0.46);
+  const faceH = headBot - hairH;
+
+  c.fillStyle = '#eeeae0'; c.fillRect(0,headBot,S,S-headBot);
+  c.fillStyle = '#22243a';
+  c.beginPath(); c.moveTo(0,headBot); c.lineTo(S*0.42,headBot); c.lineTo(S*0.50,S*0.76); c.lineTo(S*0.50,S); c.lineTo(0,S); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(S,headBot); c.lineTo(S*0.58,headBot); c.lineTo(S*0.50,S*0.76); c.lineTo(S*0.50,S); c.lineTo(S,S); c.closePath(); c.fill();
+  c.fillStyle = '#eeeae0';
+  c.beginPath(); c.moveTo(0,headBot); c.lineTo(S*0.42,headBot); c.lineTo(S*0.50,S*0.76); c.lineTo(S*0.38,S); c.lineTo(0,S); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(S,headBot); c.lineTo(S*0.58,headBot); c.lineTo(S*0.50,S*0.76); c.lineTo(S*0.62,S); c.lineTo(S,S); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(S*0.38,S); c.lineTo(S*0.62,S); c.lineTo(S*0.50,S*0.76); c.closePath(); c.fill();
+  c.strokeStyle='#b0ac9e'; c.lineWidth=5;
+  c.beginPath(); c.moveTo(S*0.42,headBot); c.lineTo(S*0.50,S*0.76); c.stroke();
+  c.beginPath(); c.moveTo(S*0.58,headBot); c.lineTo(S*0.50,S*0.76); c.stroke();
+
+  // fill entire face zone with skin first so no gaps show
+  c.fillStyle='#f5c89a';
+  c.fillRect(0, 0, S, headBot);
+  // ears
+  c.fillRect(Math.round(S*0.06),Math.round(S*0.28),Math.round(S*0.07),Math.round(S*0.10));
+  c.fillRect(Math.round(S*0.87),Math.round(S*0.28),Math.round(S*0.07),Math.round(S*0.10));
+  // side hair — buzzcut height only
+  c.fillStyle='#1e1e1e';
+  c.fillRect(0,       0, Math.round(S*0.12), Math.round(hairH*1.6));
+  c.fillRect(S*0.88,  0, Math.round(S*0.12), Math.round(hairH*1.6));
+  // buzzcut hair strip + stubble texture
+  c.fillStyle='#1e1e1e';
+  c.fillRect(Math.round(S*0.12),0,Math.round(S*0.76),hairH);
+  c.fillStyle='rgba(255,255,255,0.07)';
+  for (let y=2; y<hairH; y+=4) {
+    for (let x=Math.round(S*0.12); x<Math.round(S*0.88); x+=5) { c.fillRect(x+(y%2)*2,y,2,1); }
+  }
+
+  const eyeSz=Math.round(S*0.086), eyeTop=Math.round(hairH+faceH*0.28);
+  const lEX=Math.round(S*0.22), rEX=Math.round(S*0.67);
+  c.fillStyle='#1e1e1e'; c.fillRect(lEX,eyeTop,eyeSz,eyeSz); c.fillRect(rEX,eyeTop,eyeSz,eyeSz);
+  c.fillStyle='#ffffff';
+  const hlW=Math.round(eyeSz*0.33), hlH=Math.round(eyeSz*0.36);
+  c.fillRect(lEX+Math.round(eyeSz*0.55),eyeTop+Math.round(eyeSz*0.08),hlW,hlH);
+  c.fillRect(rEX+Math.round(eyeSz*0.55),eyeTop+Math.round(eyeSz*0.08),hlW,hlH);
+
+  c.fillStyle='rgba(220,50,50,0.55)';
+  const blushY=Math.round(hairH+faceH*0.60), blushW=Math.round(S*0.10), blushH=Math.round(S*0.04);
+  c.fillRect(Math.round(S*0.135),blushY,blushW,blushH);
+  c.fillRect(Math.round(S*0.765),blushY,blushW,blushH);
+
+  c.fillStyle='#1e1e1e';
+  const smW=Math.round(S*0.055), smH=Math.round(S*0.036);
+  const smTopY=Math.round(hairH+faceH*0.68);
+  const smL=Math.round(S*0.355), smR=Math.round(S*0.59);
+  c.fillRect(smL,smTopY,smW,smH); c.fillRect(smR,smTopY,smW,smH);
+  c.fillRect(smL,smTopY+smH,smR-smL+smW,smH);
+
+  // dimples — small marks flanking the smile
+  c.fillStyle='rgba(170,80,40,0.65)';
+  const dimpleY=smTopY+Math.round(smH*0.5);
+  c.fillRect(Math.round(S*0.265), dimpleY, Math.round(S*0.048), Math.round(S*0.022));
+  c.fillRect(Math.round(S*0.687), dimpleY, Math.round(S*0.048), Math.round(S*0.022));
+
+  const btY=Math.round(S*0.88), btH=S-btY;
+  c.fillStyle='#1e1e1e'; c.fillRect(0,btY,S,btH);
+  c.fillStyle='rgba(255,255,255,0.08)'; c.fillRect(0,btY+2,S,Math.round(btH*0.35));
+  c.strokeStyle='#3a3a3a'; c.lineWidth=1.5; c.strokeRect(0,btY,S,btH);
+  return cv;
+}
+
+// ── render & controls ────────────────────────────────────────────────────
+
+const FACES = [
+  { name: 'right',  label: 'RIGHT (+X)',  fn: () => mkSideTex(false) },
+  { name: 'left',   label: 'LEFT (−X)',   fn: () => mkSideTex(true) },
+  { name: 'top',    label: 'TOP (+Y)',    fn: () => mkTopTex() },
+  { name: 'bottom', label: 'BOTTOM (−Y)', fn: () => mkBottomTex() },
+  { name: 'front',  label: 'FRONT (+Z)',  fn: () => mkFrontFaceTex() },
+  { name: 'back',   label: 'BACK (−Z)',   fn: () => mkBackPatchTex(
+      document.getElementById('judoka-name').value   || 'Mojo',
+      document.getElementById('country-code').value  || 'MGL',
+      document.getElementById('country-name').value  || 'MONGOLIA'
+    )
+  },
+];
+
+function renderAll() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  FACES.forEach(face => {
+    const cv = face.fn();
+    cv.style.width  = '256px';
+    cv.style.height = '256px';
+
+    const div = document.createElement('div');
+    div.className = 'face';
+    const h3 = document.createElement('h3');
+    h3.textContent = face.label;
+
+    const btn = document.createElement('button');
+    btn.textContent = `Save ${face.name}.png`;
+    btn.onclick = () => downloadCanvas(cv, `${face.name}.png`);
+
+    div.appendChild(h3);
+    div.appendChild(cv);
+    div.appendChild(btn);
+    grid.appendChild(div);
+  });
+}
+
+function downloadCanvas(cv, filename) {
+  cv.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+}
+
+document.getElementById('regen-btn').addEventListener('click', renderAll);
+
+document.getElementById('save-all').addEventListener(('click'), async () => {
+  const btn = document.getElementById('save-all');
+  btn.textContent = 'Zipping…';
+  btn.disabled = true;
+
+  const folderName = document.getElementById('judoka-name').value.trim() || 'Mojo';
+  const zip = new JSZip();
+  const folder = zip.folder(folderName);
+
+  // Collect all canvas blobs in parallel
+  await Promise.all(FACES.map(face => new Promise(resolve => {
+    const cv = face.fn();
+    cv.toBlob(blob => { folder.file(`${face.name}.png`, blob); resolve(); });
+  })));
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href     = URL.createObjectURL(zipBlob);
+  a.download = `${folderName}.zip`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  btn.textContent = 'Save folder as ZIP';
+  btn.disabled = false;
+});
+
+renderAll();
+</script>
+</body>
+</html>

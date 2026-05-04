@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cube Judo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0f1a;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: white; overflow: hidden; user-select: none;
+  }
+  canvas { display: block; }
+
+  #hud {
+    position: fixed; top: 16px; width: 100%;
+    display: flex; justify-content: center; gap: 28px;
+    pointer-events: none;
+  }
+  .pill {
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.13);
+    padding: 6px 18px; border-radius: 20px;
+    font-size: 13px; letter-spacing: 1px;
+    transition: border-color 0.1s, color 0.1s;
+  }
+  #pill-moves { color: #ffd700; }
+  #pill-clock { color: #aaa; }
+  #pill-status { color: #7ab4ff; min-width: 168px; text-align: center; }
+  #pill-status.warn { color: #ff4444 !important; border-color: rgba(255,68,68,0.5) !important; }
+  #pill-opp { color: #ff9944; }
+
+  #pin-wrap {
+    position: fixed; bottom: 56px;
+    left: 50%; transform: translateX(-50%);
+    display: none; text-align: center;
+  }
+  #pin-label { font-size: 11px; letter-spacing: 2px; color: rgba(255,255,255,0.45); margin-bottom: 5px; }
+  #pin-track {
+    width: 260px; height: 16px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.18);
+  }
+  #pin-fill {
+    height: 100%; width: 0%; border-radius: 8px;
+    background: linear-gradient(90deg, #4CAF50, #8BC34A);
+  }
+  #pin-fill.bad { background: linear-gradient(90deg, #e53935, #ff7043); }
+
+  /* end-game modal */
+  #modal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.72);
+    align-items: center; justify-content: center; z-index: 99;
+  }
+  #modal.on { display: flex; }
+  #modal-box {
+    background: #111827; border: 2px solid #ffd700;
+    border-radius: 14px; padding: 40px 64px; text-align: center;
+  }
+  #modal-title { font-size: 48px; font-weight: bold; margin-bottom: 8px; }
+  #modal-sub { color: #888; font-size: 16px; margin-bottom: 30px; line-height: 1.6; }
+  .modal-btns { display: flex; gap: 14px; justify-content: center; }
+  #btn-replay {
+    background: #ffd700; color: #111;
+    border: none; padding: 11px 30px;
+    font: bold 15px 'Courier New', monospace;
+    border-radius: 8px; cursor: pointer; letter-spacing: 1px;
+  }
+  #btn-replay:hover { background: #ffe566; }
+  #btn-new-opp {
+    background: transparent; color: #ffd700;
+    border: 2px solid #ffd700; padding: 11px 30px;
+    font: bold 15px 'Courier New', monospace;
+    border-radius: 8px; cursor: pointer; letter-spacing: 1px;
+  }
+  #btn-new-opp:hover { background: rgba(255,215,0,0.12); }
+
+  /* choose opponent modal */
+  #choose-modal {
+    display: flex; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35);
+    align-items: center; justify-content: center; z-index: 99;
+  }
+  #choose-box {
+    background: rgba(11,18,31,0.78); border: 2px solid #ffd700;
+    border-radius: 14px; padding: 40px 56px; text-align: center;
+    max-width: 480px; width: 100%;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  #game-brand {
+    font-size: 11px; color: rgba(255,215,0,0.45);
+    letter-spacing: 4px; margin-bottom: 10px;
+  }
+  #game-title {
+    font-size: 52px; font-weight: bold; color: #ffd700;
+    letter-spacing: 8px; margin-bottom: 16px;
+    text-shadow: 0 0 40px rgba(255,215,0,0.35);
+  }
+  #game-desc {
+    font-size: 12px; color: rgba(255,255,255,0.4);
+    line-height: 1.7; margin-bottom: 24px;
+  }
+  #game-desc a { color: rgba(255,215,0,0.65); text-decoration: none; }
+  #game-desc a:hover { text-decoration: underline; }
+  .section-header {
+    font-size: 10px; letter-spacing: 3px;
+    color: rgba(255,255,255,0.3); margin-bottom: 8px;
+  }
+  #choose-rules { text-align: left; margin-bottom: 20px; }
+  #choose-rules ol {
+    margin: 0; padding-left: 18px;
+    color: rgba(255,255,255,0.72); font-size: 13px; line-height: 1.9;
+  }
+  #choose-controls { text-align: left; margin-bottom: 20px; }
+  #choose-vocab { text-align: left; margin-bottom: 28px; }
+  #diff-btns { display: flex; gap: 10px; justify-content: center; margin-bottom: 16px; }
+  .diff-btn {
+    background: transparent; color: rgba(255,255,255,0.45);
+    border: 1px solid rgba(255,255,255,0.2); padding: 7px 22px;
+    font: bold 13px 'Courier New', monospace;
+    border-radius: 20px; cursor: pointer; letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+  .diff-btn:hover { border-color: rgba(255,215,0,0.4); color: rgba(255,215,0,0.7); }
+  .diff-btn.active { background: rgba(255,215,0,0.12); border-color: #ffd700; color: #ffd700; }
+  .ctrl-row { display: flex; gap: 16px; align-items: center; font-size: 13px; margin-bottom: 4px; }
+  .ctrl-key { color: #ffd700; font-weight: bold; min-width: 72px; }
+  .ctrl-desc { color: rgba(255,255,255,0.55); }
+  #judoka-dropdown { position: relative; display: inline-block; margin-bottom: 24px; min-width: 220px; }
+  #judoka-trigger {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25);
+    padding: 10px 14px 10px 18px; border-radius: 20px;
+    font: 16px 'Courier New', monospace; color: #ffd700;
+    letter-spacing: 1px; cursor: pointer; user-select: none;
+  }
+  #judoka-trigger:hover { border-color: rgba(255,215,0,0.5); }
+  #judoka-trigger.open { border-color: rgba(255,215,0,0.5); border-radius: 14px 14px 0 0; }
+  #judoka-trigger.disabled { opacity: 0.4; pointer-events: none; }
+  .trigger-arrow { font-size: 10px; color: #ffd700; }
+  #judoka-options {
+    display: none; position: absolute; top: 100%; left: 0; right: 0;
+    background: #111827; border: 1px solid rgba(255,215,0,0.5);
+    border-top: none; border-radius: 0 0 14px 14px; z-index: 10; overflow: hidden;
+  }
+  #judoka-options.open { display: block; }
+  .judoka-opt {
+    padding: 10px 18px; cursor: pointer;
+    font: 15px 'Courier New', monospace; color: #ffd700;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .judoka-opt:hover { background: rgba(255,215,0,0.1); }
+  .judoka-opt.selected { background: rgba(255,215,0,0.06); }
+  .opt-country { font-size: 12px; color: rgba(255,255,255,0.38); letter-spacing: 0; }
+  #btn-fight {
+    background: #ffd700; color: #111;
+    border: none; padding: 13px 48px;
+    font: bold 16px 'Courier New', monospace;
+    border-radius: 8px; cursor: pointer; letter-spacing: 2px;
+  }
+  #btn-fight:hover { background: #ffe566; }
+  .modal-hint { margin-top: 16px; font-size: 11px; color: rgba(255,255,255,0.28); letter-spacing: 1px; }
+
+  /* hajime overlay */
+  #hajime-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.88);
+    align-items: center; justify-content: center; z-index: 100;
+  }
+  #hajime-overlay.on { display: flex; }
+  #hajime-text {
+    font-size: 88px; font-weight: bold;
+    color: #ffd700; letter-spacing: 8px;
+    text-shadow: 0 0 60px rgba(255,215,0,0.5), 0 0 20px rgba(255,215,0,0.9);
+    animation: hajime-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+  }
+  @keyframes hajime-in {
+    from { transform: scale(0.45); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+
+  #hint {
+    position: fixed; bottom: 18px;
+    left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: rgba(255,255,255,0.3); letter-spacing: 1px;
+  }
+  @media (pointer: coarse) {
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="pill" id="pill-moves">MOVES ◆◆◆</div>
+  <div class="pill" id="pill-clock">0:45</div>
+  <div class="pill" id="pill-status">ROTATE → PIN</div>
+  <div class="pill" id="pill-opp"></div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="pin-wrap">
+  <div id="pin-label">OSAEKOMI</div>
+  <div id="pin-track"><div id="pin-fill"></div></div>
+</div>
+
+
+<div id="modal">
+  <div id="modal-box">
+    <div id="modal-title"></div>
+    <div id="modal-sub"></div>
+    <div class="modal-btns">
+      <button id="btn-replay">REMATCH</button>
+      <button id="btn-new-opp">FIGHT SOMEONE ELSE</button>
+    </div>
+    <div class="modal-hint">SPACE to rematch</div>
+  </div>
+</div>
+
+<div id="choose-modal">
+  <div id="choose-box">
+    <div id="game-brand">── CUBE JUDO ──</div>
+    <div id="game-title">THROW MOJO</div>
+    <div id="game-desc">
+      Learn real judo mechanics through Cube Judo,<br>
+      a teaching method by <a href="https://munkhtulgab.github.io/" target="_blank">Munkhtulga Battogtokh</a>
+    </div>
+    <div id="choose-rules">
+      <div class="section-header">RULES</div>
+      <ol>
+        <li>Flip Mojo onto his back. Pin him for 3 unbroken seconds to win.</li>
+        <li>You have 3 moves. Move while Mojo moves — it's wasted.</li>
+        <li>10 seconds on the clock.</li>
+      </ol>
+    </div>
+    <div id="choose-controls">
+      <div class="section-header">CONTROLS</div>
+      <div class="ctrl-row"><span class="ctrl-key">↑ ↓ ← →</span><span class="ctrl-desc">Flip (swipe on mobile)</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">SPACE</span><span class="ctrl-desc">Pin (hold anywhere on mobile)</span></div>
+    </div>
+    <div id="choose-vocab">
+      <div class="section-header">VOCABULARY</div>
+      <div class="ctrl-row"><span class="ctrl-key">Uke</span><span class="ctrl-desc">the person being thrown (your opponent)</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">Tori</span><span class="ctrl-desc">the thrower (you)</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">Kuzushi</span><span class="ctrl-desc">off-balancing your opponent</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">Osaekomi</span><span class="ctrl-desc">hold-down pin</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">Ippon</span><span class="ctrl-desc">full point — wins the match</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">Hajime</span><span class="ctrl-desc">begin</span></div>
+      <div class="ctrl-row"><span class="ctrl-key">Sore made</span><span class="ctrl-desc">that's all — time's up</span></div>
+    </div>
+    <div class="section-header" style="text-align:center; margin-bottom:10px;">DIFFICULTY</div>
+    <div id="diff-btns">
+      <button class="diff-btn" data-diff="easy">EASY</button>
+      <button class="diff-btn active" data-diff="medium">MEDIUM</button>
+      <button class="diff-btn" data-diff="hard">HARD</button>
+    </div>
+    <div class="section-header" style="text-align:center; margin-bottom:10px;">PICK YOUR UKE</div>
+    <div id="judoka-dropdown">
+      <div id="judoka-trigger"><span id="judoka-trigger-label">…</span><span class="trigger-arrow">▼</span></div>
+      <div id="judoka-options"></div>
+    </div>
+    <button id="btn-fight">FIGHT!</button>
+    <div class="modal-hint">SPACE to fight</div>
+  </div>
+</div>
+
+<div id="hajime-overlay"><div id="hajime-text">HAJIME!</div></div>
+
+<div id="hint">← → ↑ ↓ &nbsp;rotate &nbsp;|&nbsp; SPACE &nbsp;hold / pin</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(async () => {
+  // ── judoka config ─────────────────────────────────────────────────
+  let JUDOKA = 'Mojo'; // folder name under judokas/
+  let DIFF   = 'medium';
+
+  const DIFF_CFG = {
+    easy:   { normalMin: 1.2,  normalRange: 1.3,  fastMin: 0.25, fastRange: 0.25 },
+    medium: { normalMin: 0.5,  normalRange: 1.0,  fastMin: 0.06, fastRange: 0.10 },
+    hard:   { normalMin: 0.15, normalRange: 0.25, fastMin: 0.03, fastRange: 0.06 },
+  };
+
+  // ── constants ──────────────────────────────────────────────────────
+  const MATCH_TIME    = 10;
+  const PIN_NEEDED    = 3;
+  const MAX_MOVES     = 3;
+  const ANIM_FRAMES   = 16;   // frames for 90° snap
+  const CUBE_SZ       = 2.2;
+  const BACK_FACE     = 5;    // BoxGeometry -Z face = back patch
+  const WARN_TIME     = 0.45; // seconds of "INCOMING!" warning before each flip
+  const DOWN          = new THREE.Vector3(0, -1, 0);
+
+  // face normals: [+X, -X, +Y, -Y, +Z, -Z]
+  const NORMALS = [
+    new THREE.Vector3( 1, 0, 0),
+    new THREE.Vector3(-1, 0, 0),
+    new THREE.Vector3( 0, 1, 0),
+    new THREE.Vector3( 0,-1, 0),
+    new THREE.Vector3( 0, 0, 1),
+    new THREE.Vector3( 0, 0,-1),
+  ];
+
+  const FLOOR_Y  = -3.2;
+  const FLOAT_Y  = -0.8;                         // resting hover position
+  const GROUND_Y = FLOOR_Y + CUBE_SZ / 2 + 0.01; // sitting on mat
+
+  // ── game state ─────────────────────────────────────────────────────
+  let movesLeft = MAX_MOVES;
+  let matchTime = MATCH_TIME;
+  let holdTime  = 0;
+  let isHolding = false;
+  let phase     = 'choosing';
+  let rotAnim   = null;   // { startQ, endQ, frame }
+  let lastTs    = 0;
+  let flipTimer = fastInterval();
+  let idleAngle = 0;
+  let snapAnim  = null;  // { startQ, frame, totalFrames } — slerp to identity on game start
+
+  // ── renderer & scene ───────────────────────────────────────────────
+  const W = Math.min(window.innerWidth, 720);
+  const H = Math.min(window.innerHeight - 60, 560);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas: document.getElementById('canvas'),
+    antialias: true,
+  });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene  = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0f1a);
+  scene.fog = new THREE.Fog(0x0a0f1a, 16, 32);
+
+  const camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 100);
+  camera.position.set(0, 3, 9);
+  camera.lookAt(0, 0, 0);
+
+  // ── lights ─────────────────────────────────────────────────────────
+  scene.add(new THREE.AmbientLight(0xffffff, 0.50));
+
+  const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+  sun.position.set(5, 12, 7);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far  = 30;
+  sun.shadow.camera.left = sun.shadow.camera.bottom = -10;
+  sun.shadow.camera.right = sun.shadow.camera.top   =  10;
+  scene.add(sun);
+
+  const fill = new THREE.DirectionalLight(0x6688cc, 0.3);
+  fill.position.set(-5, -3, -6);
+  scene.add(fill);
+
+  // ── tatami floor ───────────────────────────────────────────────────
+  // Blue outer safety zone
+  const floorBlue = new THREE.Mesh(
+    new THREE.PlaneGeometry(24, 18),
+    new THREE.MeshLambertMaterial({ color: 0x1a4b7a })
+  );
+  floorBlue.rotation.x = -Math.PI / 2;
+  floorBlue.position.y = FLOOR_Y;
+  floorBlue.receiveShadow = true;
+  scene.add(floorBlue);
+
+  // Red danger border zone (slightly raised to avoid z-fighting)
+  const floorRed = new THREE.Mesh(
+    new THREE.PlaneGeometry(13, 13),
+    new THREE.MeshLambertMaterial({ color: 0xb52b2b })
+  );
+  floorRed.rotation.x = -Math.PI / 2;
+  floorRed.position.y = FLOOR_Y + 0.005;
+  floorRed.receiveShadow = true;
+  scene.add(floorRed);
+
+  // Yellow competition area
+  const floorYellow = new THREE.Mesh(
+    new THREE.PlaneGeometry(9.5, 9.5),
+    new THREE.MeshLambertMaterial({ color: 0xd4a017 })
+  );
+  floorYellow.rotation.x = -Math.PI / 2;
+  floorYellow.position.y = FLOOR_Y + 0.01;
+  floorYellow.receiveShadow = true;
+  scene.add(floorYellow);
+
+  // Tatami grid lines on yellow area
+  const lmat = new THREE.LineBasicMaterial({ color: 0xb8891a });
+  for (let x = -4; x <= 4; x += 2) {
+    addLine(new THREE.Vector3(x, FLOOR_Y+0.02, -4.5), new THREE.Vector3(x, FLOOR_Y+0.02, 4.5));
+  }
+  for (let z = -4; z <= 4; z += 2) {
+    addLine(new THREE.Vector3(-4.5, FLOOR_Y+0.02, z), new THREE.Vector3(4.5, FLOOR_Y+0.02, z));
+  }
+  function addLine(a, b) {
+    scene.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([a, b]), lmat
+    ));
+  }
+
+  // Center circle on yellow
+  const centerCircle = new THREE.Mesh(
+    new THREE.RingGeometry(0.55, 0.7, 48),
+    new THREE.MeshBasicMaterial({ color: 0xb8891a, side: THREE.DoubleSide })
+  );
+  centerCircle.rotation.x = -Math.PI / 2;
+  centerCircle.position.y = FLOOR_Y + 0.02;
+  scene.add(centerCircle);
+
+  // ── textures ───────────────────────────────────────────────────────
+  function mkCanvas(w, h) {
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    return cv;
+  }
+
+  // Load an image file as a Three.js texture; resolves null on 404/error so caller falls back to procedural.
+  const _texLoader = new THREE.TextureLoader();
+  function loadImageTex(src) {
+    return new Promise(resolve => {
+      _texLoader.load(src, resolve, undefined, () => resolve(null));
+    });
+  }
+
+  function mkTopTex() {
+    // Top of head — solid dark hair
+    const S  = 256;
+    const cv = mkCanvas(S, S);
+    const c  = cv.getContext('2d');
+    c.fillStyle = '#1a1a1a';
+    c.fillRect(0, 0, S, S);
+    // subtle hair highlight
+    c.fillStyle = 'rgba(255,255,255,0.04)';
+    c.fillRect(S * 0.2, S * 0.15, S * 0.6, S * 0.12);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function mkSideTex() {
+    // Side view: sleeve + arm, belt stripe, gi fabric
+    const S  = 512;
+    const cv = mkCanvas(S, S);
+    const c  = cv.getContext('2d');
+
+    const hairH   = Math.round(S * 0.22);
+    const beltTop = Math.round(S * 0.88);
+    const beltH   = S - beltTop;
+
+    // gi fabric base
+    c.fillStyle = '#eeeae0';
+    c.fillRect(0, 0, S, S);
+
+    // ── arm / sleeve ──────────────────────────────────────────────
+    // sleeve from shoulder down, slightly narrowing
+    const slvX = Math.round(S * 0.28);
+    const slvW = Math.round(S * 0.44);
+    const slvT = hairH;
+    const slvB = Math.round(S * 0.48);
+
+    c.fillStyle = '#e8e4da';
+    c.beginPath();
+    c.moveTo(slvX,          slvT);
+    c.lineTo(slvX + slvW,   slvT);
+    c.lineTo(slvX + slvW - Math.round(S*0.03), slvB);
+    c.lineTo(slvX + Math.round(S*0.03),        slvB);
+    c.closePath();
+    c.fill();
+
+    // sleeve seam lines (gi fold texture)
+    c.strokeStyle = '#ccc8bc';
+    c.lineWidth = 2;
+    c.beginPath(); c.moveTo(slvX + slvW*0.3, slvT); c.lineTo(slvX + slvW*0.3, slvB); c.stroke();
+    c.beginPath(); c.moveTo(slvX + slvW*0.7, slvT); c.lineTo(slvX + slvW*0.7, slvB); c.stroke();
+
+    // fist / hand
+    const fstW = Math.round(slvW * 0.72);
+    const fstH = Math.round(S * 0.078);
+    const fstX = slvX + Math.round((slvW - fstW) / 2);
+    const fstY = slvB;
+
+    c.fillStyle = '#f5c89a';
+    c.fillRect(fstX, fstY, fstW, fstH);
+
+    // knuckle lines
+    c.strokeStyle = '#d4a070';
+    c.lineWidth = 2;
+    for (let i = 1; i < 4; i++) {
+      const kx = fstX + Math.round(fstW * i / 4);
+      c.beginPath(); c.moveTo(kx, fstY + 2); c.lineTo(kx, fstY + fstH - 2); c.stroke();
+    }
+
+    // ── belt ──────────────────────────────────────────────────────
+    c.fillStyle = '#1e1e1e';
+    c.fillRect(0, beltTop, S, beltH);
+
+    // belt highlight (subtle sheen)
+    c.fillStyle = 'rgba(255,255,255,0.08)';
+    c.fillRect(0, beltTop + 2, S, Math.round(beltH * 0.35));
+
+    // belt edge stitching
+    c.strokeStyle = '#3a3a3a';
+    c.lineWidth = 1.5;
+    c.strokeRect(0, beltTop, S, beltH);
+
+    // ── hair at top ───────────────────────────────────────────────
+    c.fillStyle = '#1a1a1a';
+    c.fillRect(0, 0, S, hairH);
+
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function mkBottomTex() {
+    // View from below: two cute feet with toes
+    const S  = 512;
+    const cv = mkCanvas(S, S);
+    const c  = cv.getContext('2d');
+
+    // gi pants fabric
+    c.fillStyle = '#e0dbd0';
+    c.fillRect(0, 0, S, S);
+
+    // subtle pants seam down the middle
+    c.strokeStyle = '#ccc8ba';
+    c.lineWidth = 2;
+    c.beginPath(); c.moveTo(S/2, 0); c.lineTo(S/2, S); c.stroke();
+
+    const footW = Math.round(S * 0.28);
+    const footH = Math.round(S * 0.42);
+    const footY = Math.round(S * 0.30);  // feet centered vertically
+    const lFX   = Math.round(S * 0.11);
+    const rFX   = Math.round(S * 0.61);
+    const toeH  = Math.round(S * 0.09);
+    const toeY  = footY - toeH + 4;      // toes at top of foot shape
+
+    // pants cuff above each foot
+    c.fillStyle = '#d5d0c4';
+    c.fillRect(lFX - 4, Math.round(S * 0.16), footW + 8, Math.round(footY - S * 0.16));
+    c.fillRect(rFX - 4, Math.round(S * 0.16), footW + 8, Math.round(footY - S * 0.16));
+
+    // foot sole skin
+    c.fillStyle = '#f5c89a';
+    c.fillRect(lFX, footY, footW, footH);
+    c.fillRect(rFX, footY, footW, footH);
+
+    // sole outline
+    c.strokeStyle = '#d4a272';
+    c.lineWidth = 2;
+    c.strokeRect(lFX, footY, footW, footH);
+    c.strokeRect(rFX, footY, footW, footH);
+
+    // toes — 5 blocky little squares per foot
+    const nToes  = 5;
+    const tPad   = 3;
+    const tW     = Math.round((footW - tPad * (nToes + 1)) / nToes);
+    c.fillStyle  = '#e8b688';
+    c.strokeStyle = '#d4a272';
+    c.lineWidth   = 1.5;
+    for (let i = 0; i < nToes; i++) {
+      const tx = lFX + tPad + i * (tW + tPad);
+      c.fillRect(tx, toeY, tW, toeH);
+      c.strokeRect(tx, toeY, tW, toeH);
+    }
+    for (let i = 0; i < nToes; i++) {
+      const tx = rFX + tPad + i * (tW + tPad);
+      c.fillRect(tx, toeY, tW, toeH);
+      c.strokeRect(tx, toeY, tW, toeH);
+    }
+
+    // tiny toenail highlight on each toe
+    c.fillStyle = 'rgba(255,255,255,0.35)';
+    for (let i = 0; i < nToes; i++) {
+      c.fillRect(lFX + tPad + i*(tW+tPad) + 2, toeY + 2, Math.round(tW*0.5), Math.round(toeH*0.4));
+      c.fillRect(rFX + tPad + i*(tW+tPad) + 2, toeY + 2, Math.round(tW*0.5), Math.round(toeH*0.4));
+    }
+
+    // ── belt at bottom (matches waist edge of front/side faces) ──────
+    const btY = Math.round(S * 0.89);
+    const btH = S - btY;
+    c.fillStyle = '#1e1e1e';
+    c.fillRect(0, btY, S, btH);
+    c.fillStyle = 'rgba(255,255,255,0.08)';
+    c.fillRect(0, btY + 2, S, Math.round(btH * 0.35));
+    c.strokeStyle = '#3a3a3a';
+    c.lineWidth = 1.5;
+    c.strokeRect(0, btY, S, btH);
+
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function mkWhiteTex() {
+    // fallback plain gi fabric (shouldn't be visible with all faces textured)
+    const cv = mkCanvas(256, 256);
+    const c  = cv.getContext('2d');
+    c.fillStyle = '#eeeae0';
+    c.fillRect(0, 0, 256, 256);
+    c.strokeStyle = '#d5d0c6';
+    c.lineWidth = 3;
+    c.strokeRect(4, 4, 248, 248);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function mkBackPatchTex() {
+    const S  = 512;
+    const cv = mkCanvas(S, S);
+    const c  = cv.getContext('2d');
+
+    // gi fabric
+    c.fillStyle = '#eeeae0';
+    c.fillRect(0, 0, S, S);
+
+    // outer stitch border
+    c.strokeStyle = '#c8c4ba';
+    c.lineWidth = 5;
+    c.strokeRect(16, 16, S - 32, S - 32);
+
+    // blue name band
+    const bX = 26, bY = 26, bW = S - 52, bH = Math.round(S * 0.43);
+    c.fillStyle = '#003DA5';
+    c.fillRect(bX, bY, bW, bH);
+    c.strokeStyle = 'rgba(255,255,255,0.5)';
+    c.lineWidth = 2;
+    c.strokeRect(bX + 4, bY + 4, bW - 8, bH - 8);
+
+    // name
+    c.fillStyle = '#ffffff';
+    c.font = `bold ${Math.round(S * 0.135)}px "Arial Black", Arial, sans-serif`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('MOJO', S / 2, bY + bH * 0.43);
+
+    // country code
+    c.font = `bold ${Math.round(S * 0.085)}px Arial, sans-serif`;
+    c.fillText('MGL', S / 2, bY + bH * 0.78);
+
+    // lower section — country name
+    const lowerMid = (bY + bH + (S - 16)) / 2;
+    c.fillStyle = '#1a1a2e';
+    c.font = `bold ${Math.round(S * 0.092)}px Arial, sans-serif`;
+    c.fillText('MONGOLIA', S / 2, lowerMid);
+
+    // decorative lines
+    c.strokeStyle = '#b0aba0';
+    c.lineWidth = 1.5;
+    for (const dy of [-22, 22]) {
+      c.beginPath();
+      c.moveTo(46, lowerMid + dy);
+      c.lineTo(S - 46, lowerMid + dy);
+      c.stroke();
+    }
+
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function mkFrontFaceTex() {
+    const S  = 512;
+    const cv = mkCanvas(S, S);
+    const c  = cv.getContext('2d');
+
+    const hairH  = Math.round(S * 0.22);  // hair band height
+    const headBot = Math.round(S * 0.52); // where face ends, torso begins
+    const faceH  = headBot - hairH;       // usable face zone height
+
+    // ── torso & lapels ──────────────────────────────────────────────
+    c.fillStyle = '#eeeae0';
+    c.fillRect(0, headBot, S, S - headBot);
+
+    // dark collar (left side)
+    c.fillStyle = '#22243a';
+    c.beginPath();
+    c.moveTo(0,        headBot);
+    c.lineTo(S * 0.42, headBot);
+    c.lineTo(S * 0.50, S * 0.76);
+    c.lineTo(S * 0.50, S);
+    c.lineTo(0,        S);
+    c.closePath();
+    c.fill();
+
+    // dark collar (right side)
+    c.beginPath();
+    c.moveTo(S,        headBot);
+    c.lineTo(S * 0.58, headBot);
+    c.lineTo(S * 0.50, S * 0.76);
+    c.lineTo(S * 0.50, S);
+    c.lineTo(S,        S);
+    c.closePath();
+    c.fill();
+
+    // white left lapel (folds over) — extends to edge to cover dark collar strip
+    c.fillStyle = '#eeeae0';
+    c.beginPath();
+    c.moveTo(0,        headBot);
+    c.lineTo(S * 0.42, headBot);
+    c.lineTo(S * 0.50, S * 0.76);
+    c.lineTo(S * 0.38, S);
+    c.lineTo(0,        S);
+    c.closePath();
+    c.fill();
+
+    // white right lapel (under left) — extends to edge
+    c.beginPath();
+    c.moveTo(S,        headBot);
+    c.lineTo(S * 0.58, headBot);
+    c.lineTo(S * 0.50, S * 0.76);
+    c.lineTo(S * 0.62, S);
+    c.lineTo(S,        S);
+    c.closePath();
+    c.fill();
+
+    // fill the centre triangle gap between lapels below the V-point
+    c.beginPath();
+    c.moveTo(S * 0.38, S);
+    c.lineTo(S * 0.62, S);
+    c.lineTo(S * 0.50, S * 0.76);
+    c.closePath();
+    c.fill();
+
+    // lapel shadow crease lines
+    c.strokeStyle = '#b0ac9e';
+    c.lineWidth = 5;
+    c.beginPath(); c.moveTo(S * 0.42, headBot); c.lineTo(S * 0.50, S * 0.76); c.stroke();
+    c.beginPath(); c.moveTo(S * 0.58, headBot); c.lineTo(S * 0.50, S * 0.76); c.stroke();
+
+    // ── face / skin ─────────────────────────────────────────────────
+    // side-hair / ears
+    c.fillStyle = '#1e1e1e';
+    c.fillRect(0,        0,     Math.round(S * 0.12), Math.round(headBot * 0.62));
+    c.fillRect(S * 0.88, 0,     Math.round(S * 0.12), Math.round(headBot * 0.62));
+
+    // skin fill
+    c.fillStyle = '#f5c89a';
+    c.fillRect(Math.round(S * 0.12), hairH, Math.round(S * 0.76), headBot - hairH);
+
+    // ears
+    c.fillRect(Math.round(S * 0.06), Math.round(S * 0.28), Math.round(S * 0.07), Math.round(S * 0.10));
+    c.fillRect(Math.round(S * 0.87), Math.round(S * 0.28), Math.round(S * 0.07), Math.round(S * 0.10));
+
+    // ── hair ────────────────────────────────────────────────────────
+    c.fillStyle = '#1e1e1e';
+    c.fillRect(Math.round(S * 0.12), 0, Math.round(S * 0.76), hairH);
+
+    // ── eyes ────────────────────────────────────────────────────────
+    const eyeSz  = Math.round(S * 0.086);
+    const eyeTop = Math.round(hairH + faceH * 0.28);
+    const lEX    = Math.round(S * 0.22);
+    const rEX    = Math.round(S * 0.67);
+
+    c.fillStyle = '#1e1e1e';
+    c.fillRect(lEX, eyeTop, eyeSz, eyeSz);
+    c.fillRect(rEX, eyeTop, eyeSz, eyeSz);
+
+    // eye whites
+    c.fillStyle = '#ffffff';
+    const hlW = Math.round(eyeSz * 0.33);
+    const hlH = Math.round(eyeSz * 0.36);
+    c.fillRect(lEX + Math.round(eyeSz * 0.55), eyeTop + Math.round(eyeSz * 0.08), hlW, hlH);
+    c.fillRect(rEX + Math.round(eyeSz * 0.55), eyeTop + Math.round(eyeSz * 0.08), hlW, hlH);
+
+    // ── blush ────────────────────────────────────────────────────────
+    c.fillStyle = 'rgba(240, 95, 75, 0.36)';
+    const blushY = Math.round(hairH + faceH * 0.60);
+    const blushW = Math.round(S * 0.10);
+    const blushH = Math.round(S * 0.04);
+    c.fillRect(Math.round(S * 0.135), blushY, blushW, blushH);
+    c.fillRect(Math.round(S * 0.765), blushY, blushW, blushH);
+
+    // ── smile (pixel-art U: two side dots + bottom bar) ─────────────
+    c.fillStyle = '#1e1e1e';
+    const smW    = Math.round(S * 0.055);
+    const smH    = Math.round(S * 0.036);
+    const smTopY = Math.round(hairH + faceH * 0.76);
+    const smL    = Math.round(S * 0.355);
+    const smR    = Math.round(S * 0.59);
+    c.fillRect(smL,  smTopY,         smW, smH);          // left dot
+    c.fillRect(smR,  smTopY,         smW, smH);          // right dot
+    c.fillRect(smL,  smTopY + smH,   smR - smL + smW, smH); // bottom bar
+
+    // ── belt at bottom (wraps around waist) ──────────────────────────
+    const btY = Math.round(S * 0.88);
+    const btH = S - btY;
+    c.fillStyle = '#1e1e1e';
+    c.fillRect(0, btY, S, btH);
+    c.fillStyle = 'rgba(255,255,255,0.08)';
+    c.fillRect(0, btY + 2, S, Math.round(btH * 0.35));
+    c.strokeStyle = '#3a3a3a';
+    c.lineWidth = 1.5;
+    c.strokeRect(0, btY, S, btH);
+
+    return new THREE.CanvasTexture(cv);
+  }
+
+  // BoxGeometry face order: +X(0 right), -X(1 left), +Y(2 top), -Y(3 bottom), +Z(4 front), -Z(5 back)
+  const FACE_NAMES     = ['left', 'right', 'top', 'bottom', 'front', 'back'];
+  const FACE_FALLBACKS = [mkSideTex, mkSideTex, mkTopTex, mkBottomTex, mkFrontFaceTex, mkBackPatchTex];
+
+  async function loadFaceTextures() {
+    return Promise.all(
+      FACE_NAMES.map(async (name, i) => {
+        const t = await loadImageTex(`judokas/${JUDOKA}/${name}.png`);
+        return t ?? FACE_FALLBACKS[i]();
+      })
+    );
+  }
+
+  const textures = await loadFaceTextures();
+  const cubeMats = textures.map(t => new THREE.MeshLambertMaterial({ map: t }));
+
+  const cube = new THREE.Mesh(
+    new THREE.BoxGeometry(CUBE_SZ, CUBE_SZ, CUBE_SZ),
+    cubeMats
+  );
+  cube.castShadow = true;
+  cube.position.y = FLOAT_Y;
+  // Identity rotation: BACK_FACE (-Z local) points toward -Z world = away from camera.
+  // The judoka faces you; their back is on the far side.
+  scene.add(cube);
+
+  // soft shadow blob
+  const blob = new THREE.Mesh(
+    new THREE.CircleGeometry(1.3, 32),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 })
+  );
+  blob.rotation.x = -Math.PI / 2;
+  blob.position.y = FLOOR_Y + 0.03;
+  scene.add(blob);
+
+  // ── helpers ────────────────────────────────────────────────────────
+  function backFaceDown() {
+    return NORMALS[BACK_FACE].clone().applyQuaternion(cube.quaternion).dot(DOWN) > 0.82;
+  }
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function startRotAnim(axis, sign) {
+    if (rotAnim) return;
+    const startQ = cube.quaternion.clone();
+    const endQ   = new THREE.Quaternion()
+      .setFromAxisAngle(axis, sign * Math.PI / 2)
+      .multiply(startQ);
+    rotAnim = { startQ, endQ, frame: 0 };
+  }
+
+  function fastInterval() { const c = DIFF_CFG[DIFF]; return c.fastMin + Math.random() * c.fastRange; }
+  function nextFlipInterval() {
+    const c = DIFF_CFG[DIFF];
+    if (backFaceDown()) return fastInterval();
+    return c.normalMin + Math.random() * c.normalRange;
+  }
+
+  // ── controls ───────────────────────────────────────────────────────
+  const held = new Set();
+
+  document.addEventListener('keydown', e => {
+    if (held.has(e.code)) return;
+    held.add(e.code);
+
+    if (e.code === 'Space') {
+      if (phase === 'choosing') {
+        e.preventDefault();
+        startGame(selectedJudoka);
+        return;
+      }
+      if (phase === 'won' || phase === 'lost') {
+        e.preventDefault();
+        startGame(JUDOKA);
+        return;
+      }
+    }
+
+    if (phase !== 'playing') return;
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      isHolding = true;
+      return;
+    }
+
+    if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code)) return;
+    e.preventDefault();
+    handleFlip(e.code);
+  });
+
+  function handleFlip(code) {
+    if (phase !== 'playing') return;
+    if (movesLeft <= 0) return;
+    movesLeft--;
+    refreshMovesUI();
+    if (movesLeft === 0) { endMatch(false, 'nomoves'); return; }
+    if (rotAnim) return; // move consumed but wasted — uke was moving
+    const isLR = code === 'ArrowLeft' || code === 'ArrowRight';
+    const axis = new THREE.Vector3(isLR ? 0 : 1, 0, isLR ? 1 : 0);
+    const sign = (code === 'ArrowRight' || code === 'ArrowUp') ? -1 : 1;
+    startRotAnim(axis, sign);
+  }
+
+  document.addEventListener('keyup', e => {
+    held.delete(e.code);
+    if (e.code === 'Space') {
+      isHolding = false;
+      holdTime  = 0;
+      document.getElementById('pin-fill').style.width = '0%';
+      document.getElementById('pin-wrap').style.display = 'none';
+    }
+  });
+
+  // ── touch: swipe to flip, hold anywhere to pin ────────────────────
+  let touchStart = null;
+  document.addEventListener('touchstart', e => {
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    if (phase === 'playing') isHolding = true;
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (!touchStart) return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    touchStart = null;
+    isHolding = false;
+    holdTime  = 0;
+    document.getElementById('pin-fill').style.width = '0%';
+    document.getElementById('pin-wrap').style.display = 'none';
+    if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return; // tap, not swipe
+    if (Math.abs(dx) > Math.abs(dy)) {
+      handleFlip(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+    } else {
+      handleFlip(dy > 0 ? 'ArrowDown' : 'ArrowUp');
+    }
+  }, { passive: true });
+
+  // ── HUD ────────────────────────────────────────────────────────────
+  const MOVE_DOTS = ['◆◆◆', '◆◆◇', '◆◇◇', '◇◇◇'];
+
+  function refreshMovesUI() {
+    const el = document.getElementById('pill-moves');
+    el.textContent = `MOVES ${MOVE_DOTS[MAX_MOVES - movesLeft]}`;
+    if (movesLeft === 0) el.style.color = '#ff6b6b';
+    else el.style.color = '#ffd700';
+  }
+
+  function setStatus(txt, warn) {
+    const el = document.getElementById('pill-status');
+    el.textContent = txt;
+    el.className   = warn ? 'pill warn' : 'pill';
+  }
+
+  function setPinBar(pct, good) {
+    document.getElementById('pin-wrap').style.display = 'block';
+    document.getElementById('pin-fill').style.width = `${Math.max(0, pct * 100)}%`;
+    document.getElementById('pin-fill').className   = good ? '' : 'bad';
+  }
+
+  function endMatch(won, reason) {
+    phase = won ? 'won' : 'lost';
+    document.getElementById('modal').classList.add('on');
+    const t = document.getElementById('modal-title');
+    t.textContent = won ? 'IPPON!' : 'SORE MADE';
+    t.style.color = won ? '#ffd700' : '#ff6b6b';
+    const winMsgs = [
+      `Got lucky.`,
+      `${JUDOKA} is shook.`,
+      `Clean pin. Textbook.`,
+      `${JUDOKA} didn't see that coming.`,
+      `That's how it's done.`,
+      `${JUDOKA} has no excuses.`,
+      `First try? Beginner's luck.`,
+      `Osaekomi. No notes.`,
+      `${JUDOKA} will be thinking about that one.`,
+      `You just pinned the unpinnable.`,
+      `${JUDOKA} is filing a formal complaint.`,
+      `History made. ${JUDOKA} has been thrown.`,
+      `Perfect execution. No argument.`,
+      `The mat has been introduced to ${JUDOKA}.`,
+      `${JUDOKA} didn't think this was possible.`,
+    ];
+    const noMovesMsgs = [
+      `Out of moves. ${JUDOKA} is too strong.`,
+      `All 3 moves wasted. ${JUDOKA} is not impressed.`,
+      `No moves left. ${JUDOKA} walks away.`,
+      `Out of moves. ${JUDOKA} didn't even sweat.`,
+      `You froze. ${JUDOKA} escaped.`,
+      `3 moves gone. ${JUDOKA} barely noticed.`,
+      `${JUDOKA} read every move. Out of options.`,
+      `No moves, no pin. ${JUDOKA} survives.`,
+      `${JUDOKA} was always one step ahead.`,
+      `Moves exhausted. ${JUDOKA} is still standing.`,
+      `${JUDOKA} watched all 3 moves like a documentary.`,
+      `3 moves. Zero progress. ${JUDOKA} didn't flinch.`,
+      `${JUDOKA} counted your moves before you made them.`,
+      `Out of options. ${JUDOKA} barely changed his stance.`,
+      `${JUDOKA} has seen better. Much better.`,
+    ];
+    const timeMsgs = [
+      `${JUDOKA} is simply unthrowable.`,
+      `${JUDOKA} has never been pinned. Not once.`,
+      `Science cannot explain ${JUDOKA}'s balance.`,
+      `${JUDOKA} is built different. Literally.`,
+      `${JUDOKA} invented kuzushi. He just hasn't told anyone.`,
+      `${JUDOKA}'s footwork is a registered phenomenon.`,
+      `Experts say ${JUDOKA} has perfect gripping instincts.`,
+      `${JUDOKA}'s centre of gravity is technically illegal.`,
+      `${JUDOKA} doesn't get thrown. Gravity asked permission and ${JUDOKA} said no.`,
+      `${JUDOKA} once pinned a black belt by standing still.`,
+      `${JUDOKA} once threw someone during the opening bow.`,
+      `${JUDOKA} once escaped a pin by coughing.`,
+      `${JUDOKA} once won a tournament he didn't enter.`,
+      `${JUDOKA} once scored ippon with his eyes closed. The judges gave extra points.`,
+      `${JUDOKA} was once disqualified for making it look too easy.`,
+    ];
+    const rand = a => a[Math.floor(Math.random() * a.length)];
+    const lostMsg = reason === 'nomoves' ? rand(noMovesMsgs) : rand(timeMsgs);
+    document.getElementById('modal-sub').textContent = won ? rand(winMsgs) : lostMsg;
+  }
+
+  // ── game flow ──────────────────────────────────────────────────────
+  function waitForSnap() {
+    return new Promise(resolve => {
+      (function check() { snapAnim === null ? resolve() : requestAnimationFrame(check); })();
+    });
+  }
+
+  async function startGame(name) {
+    JUDOKA = name;
+
+    // Hide choose/end modals, show HAJIME!
+    document.getElementById('choose-modal').style.display = 'none';
+    document.getElementById('modal').classList.remove('on');
+    const overlay = document.getElementById('hajime-overlay');
+    overlay.classList.add('on');
+
+    // Snap the cube from its current idle rotation to front-facing (identity).
+    // Phase 'snapping' keeps the loop from running game logic or idle rotation.
+    snapAnim = { startQ: cube.quaternion.clone(), frame: 0, totalFrames: 38 };
+    phase = 'snapping';
+
+    // Reset game state
+    movesLeft = MAX_MOVES;
+    matchTime = MATCH_TIME;
+    holdTime  = 0;
+    isHolding = false;
+    rotAnim   = null;
+    flipTimer = fastInterval();
+
+    // Reset HUD
+    refreshMovesUI();
+    setStatus('ROTATE → PIN', false);
+    const secs = MATCH_TIME;
+    document.getElementById('pill-clock').textContent =
+      `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    document.getElementById('pill-clock').style.color = '#aaa';
+    document.getElementById('pill-opp').textContent = `VS. ${name.toUpperCase()}`;
+    document.getElementById('pin-wrap').style.display = 'none';
+    document.getElementById('pin-fill').style.width = '0%';
+    document.getElementById('pin-fill').className = '';
+
+    // Load textures, hold HAJIME! for at least 900ms, wait for snap to land
+    const [newTextures] = await Promise.all([
+      loadFaceTextures(),
+      new Promise(resolve => setTimeout(resolve, 900)),
+      waitForSnap(),
+    ]);
+    newTextures.forEach((t, i) => {
+      cube.material[i].map = t;
+      cube.material[i].needsUpdate = true;
+    });
+
+    cube.position.y = FLOAT_Y;
+    overlay.classList.remove('on');
+    phase = 'playing';
+  }
+
+  function showChooseModal() {
+    phase = 'choosing';
+    document.getElementById('modal').classList.remove('on');
+    document.getElementById('choose-modal').style.display = 'flex';
+  }
+
+  // ── main loop ──────────────────────────────────────────────────────
+  const RANDOM_AXES = [
+    { axis: new THREE.Vector3(1, 0, 0), sign:  1 },
+    { axis: new THREE.Vector3(1, 0, 0), sign: -1 },
+    { axis: new THREE.Vector3(0, 1, 0), sign:  1 },
+    { axis: new THREE.Vector3(0, 1, 0), sign: -1 },
+  ];
+
+  function loop(ts) {
+    requestAnimationFrame(loop);
+    const dt = Math.min((ts - lastTs) / 1000, 0.05);
+    lastTs = ts;
+
+    if (phase === 'choosing') {
+      idleAngle += dt * 0.5;
+      cube.rotation.set(0.18, idleAngle, 0.08);
+      renderer.render(scene, camera);
+      return;
+    }
+
+    if (phase === 'snapping') {
+      if (snapAnim) {
+        snapAnim.frame++;
+        const raw  = snapAnim.frame / snapAnim.totalFrames;
+        const ease = raw < 0.5 ? 2*raw*raw : -1 + (4 - 2*raw)*raw;
+        cube.quaternion.slerpQuaternions(snapAnim.startQ, new THREE.Quaternion(), Math.min(ease, 1));
+        if (snapAnim.frame >= snapAnim.totalFrames) {
+          cube.quaternion.identity();
+          snapAnim = null;
+        }
+      }
+      renderer.render(scene, camera);
+      return;
+    }
+
+    if (phase !== 'playing') { renderer.render(scene, camera); return; }
+
+    // match clock
+    matchTime -= dt;
+    const secs = Math.max(0, Math.ceil(matchTime));
+    document.getElementById('pill-clock').textContent =
+      `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    document.getElementById('pill-clock').style.color = secs <= 5 ? '#ff6b6b' : '#aaa';
+    if (matchTime <= 0) { endMatch(false); return; }
+
+    // rotation animation
+    if (rotAnim) {
+      rotAnim.frame++;
+      const raw  = rotAnim.frame / ANIM_FRAMES;
+      const ease = raw < 0.5 ? 2 * raw * raw : -1 + (4 - 2 * raw) * raw;
+      cube.quaternion.slerpQuaternions(rotAnim.startQ, rotAnim.endQ, Math.min(ease, 1));
+      if (rotAnim.frame >= ANIM_FRAMES) {
+        cube.quaternion.copy(rotAnim.endQ);
+        rotAnim = null;
+      }
+    }
+
+    // clamp flipTimer the moment back face is exposed
+    if (backFaceDown() && !rotAnim && flipTimer > DIFF_CFG[DIFF].fastMin + DIFF_CFG[DIFF].fastRange) {
+      flipTimer = fastInterval();
+    }
+
+    // opponent flip countdown (pauses while player holds or animation runs)
+    if (!isHolding && !rotAnim) {
+      flipTimer -= dt;
+      if (flipTimer <= 0) {
+        const pool = backFaceDown() ? RANDOM_AXES.filter(a => a.axis.y === 0) : RANDOM_AXES;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        startRotAnim(pick.axis, pick.sign);
+        flipTimer = nextFlipInterval();
+      }
+    } else if (isHolding) {
+      flipTimer = Math.max(flipTimer, WARN_TIME + 0.1); // don't trigger during hold
+    }
+
+    // cube vertical position: float up or sink to mat on pin
+    const targetY = isHolding ? GROUND_Y : FLOAT_Y;
+    cube.position.y = lerp(cube.position.y, targetY, 0.14);
+
+    // shadow blob scales with height above floor
+    const heightAboveFloor = cube.position.y - FLOOR_Y;
+    const shadowScale = Math.max(0.3, 1 - heightAboveFloor * 0.08);
+    blob.scale.set(shadowScale, shadowScale, shadowScale);
+
+    // status / warning
+    const isWarning = flipTimer < WARN_TIME && !isHolding && !rotAnim;
+
+    if (isHolding && !rotAnim) {
+      const onMat   = cube.position.y <= GROUND_Y + 0.15;
+      const backDown = backFaceDown();
+      document.getElementById('pin-wrap').style.display = 'block';
+      if (onMat && backDown) {
+        holdTime += dt;
+        setPinBar(holdTime / PIN_NEEDED, true);
+        setStatus('OSAE KOMI!', false);
+        if (holdTime >= PIN_NEEDED) { endMatch(true); return; }
+      } else {
+        holdTime = 0;
+        setPinBar(0, false);
+        setStatus(backDown ? 'SINKING...' : 'WRONG SIDE!', false);
+      }
+    } else {
+      holdTime = 0;
+      if (!isHolding) {
+        document.getElementById('pin-wrap').style.display = 'none';
+      }
+      if (isWarning) {
+        setStatus('INCOMING!', true);
+      } else if (rotAnim) {
+        setStatus('...', false);
+      } else if (movesLeft === 0) {
+        setStatus('SPACE TO PIN', false);
+      } else {
+        setStatus('ROTATE → PIN', false);
+      }
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  // ── choose opponent modal ──────────────────────────────────────────
+  const JUDOKA_META = {
+    'Mojo':     { label: 'Mojo', country: 'Mongolia' },
+    'Mojo_GBR': { label: 'Mojo', country: 'Great Britain' },
+  };
+  function judokaMeta(name) { return JUDOKA_META[name] || { label: name, country: '' }; }
+
+  let selectedJudoka = JUDOKA;
+
+  async function initChooseModal() {
+    let names = [JUDOKA];
+    try {
+      const res = await fetch('judokas/list');
+      if (res.ok) {
+        const text = await res.text();
+        names = text.split('\n').map(s => s.trim()).filter(Boolean);
+      }
+    } catch {}
+
+    const trigger = document.getElementById('judoka-trigger');
+    const triggerLabel = document.getElementById('judoka-trigger-label');
+    const optList = document.getElementById('judoka-options');
+
+    function setSelected(name) {
+      selectedJudoka = name;
+      const m = judokaMeta(name);
+      triggerLabel.innerHTML = m.label + (m.country ? ` <span class="opt-country">${m.country}</span>` : '');
+      optList.querySelectorAll('.judoka-opt').forEach(el => {
+        el.classList.toggle('selected', el.dataset.value === name);
+      });
+    }
+
+    names.forEach(name => {
+      const m = judokaMeta(name);
+      const div = document.createElement('div');
+      div.className = 'judoka-opt';
+      div.dataset.value = name;
+      div.innerHTML = m.label + (m.country ? ` <span class="opt-country">${m.country}</span>` : '');
+      div.addEventListener('click', () => {
+        setSelected(name);
+        trigger.classList.remove('open');
+        optList.classList.remove('open');
+      });
+      optList.appendChild(div);
+    });
+
+    setSelected(JUDOKA);
+
+    trigger.addEventListener('click', () => {
+      trigger.classList.toggle('open');
+      optList.classList.toggle('open');
+    });
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#judoka-dropdown')) {
+        trigger.classList.remove('open');
+        optList.classList.remove('open');
+      }
+    });
+
+    document.getElementById('btn-fight').addEventListener('click', () => startGame(selectedJudoka));
+  }
+
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      DIFF = btn.dataset.diff;
+    });
+  });
+
+  document.getElementById('btn-replay').addEventListener('click', () => startGame(JUDOKA));
+  document.getElementById('btn-new-opp').addEventListener('click', () => showChooseModal());
+
+  initChooseModal();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
